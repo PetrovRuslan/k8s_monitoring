@@ -1,0 +1,90 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: victoriametrics-sys
+  namespace: monitoring
+  labels:
+    app: victoriametrics-sys
+spec:
+  ports:
+  - port: 8428
+    name: victoria
+    protocol: TCP
+  clusterIP: None
+  selector:
+    app: victoriametrics-sys
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: victoriametrics-sys-connect
+  namespace: monitoring
+  labels:
+    app: victoriametrics-sys
+spec:
+  ports:
+  - port: 8428
+    name: victoria
+    protocol: TCP
+  selector:
+    app: victoriametrics-sys
+    statefulset.kubernetes.io/pod-name: victoriametrics-sys-0
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: victoriametrics-sys
+  namespace: monitoring
+  labels:
+    app: victoriametrics-sys
+spec:
+  selector:
+    matchLabels:
+      app: victoriametrics-sys
+  serviceName: victoriametrics-sys
+  template:
+    metadata:
+      labels:
+        app: victoriametrics-sys
+    spec:
+      priorityClassName: low-priority
+      containers:
+        - name: victoriametrics-sys
+          image: victoriametrics/victoria-metrics:v1.93.12
+          imagePullPolicy: IfNotPresent
+          args:
+            - -retentionPeriod=1d
+            - -loggerLevel=INFO
+            - -loggerFormat=json
+          ports:
+            - containerPort: 8428
+              name: victoria
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: victoria
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: victoria
+            initialDelaySeconds: 5
+            periodSeconds: 15
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 200m
+              memory: 500Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          volumeMounts:
+            - name: vm-pv-storage
+              mountPath: /victoria-metrics-data
+      volumes:
+        - name: vm-pv-storage
+          persistentVolumeClaim:
+            claimName: vm-pv-claim
